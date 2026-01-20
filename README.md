@@ -172,7 +172,7 @@ JAVA_EXTRA_OPTS="--enable-native-access=ALL-UNNAMED"
 DISABLE_SENTRY="--disable-sentry"
 
 # Accept early plugins (WARNING: may cause stability issues)
-ACCEPT_EARLY_PLUGINS="--disable-sentry"
+ACCEPT_EARLY_PLUGINS=""
 # ACCEPT_EARLY_PLUGINS="--accept-early-plugins"  # Uncomment to enable
 
 # Authentication mode
@@ -316,12 +316,104 @@ Display logs in real-time (Ctrl+C to quit).
 
 ---
 
+## 🎨 Usage Examples
+
+### Scenario 1: Installation and First Start
+
+```bash
+# Installation
+./manage-hytale-server.sh install
+
+# Start in normal mode
+./manage-hytale-server.sh start normal
+
+# Check status
+./manage-hytale-server.sh status
+
+# View logs
+./manage-hytale-server.sh logs
+```
+
+### Scenario 2: Change Allocated Memory
+
+```bash
+# Edit configuration
+nano Config/server.conf
+
+# Modify JAVA_MEMORY
+JAVA_MEMORY="-Xmx8G -Xms4G"
+
+# Restart server
+./manage-hytale-server.sh restart normal
+```
+
+### Scenario 3: Enable Early Plugins
+
+```bash
+# Edit configuration
+nano Config/server.conf
+
+# Uncomment the line
+ACCEPT_EARLY_PLUGINS="--accept-early-plugins"
+
+# Restart
+./manage-hytale-server.sh restart normal
+```
+
+### Scenario 4: Server Update
+
+```bash
+# Stop server
+./manage-hytale-server.sh stop
+
+# Update
+./manage-hytale-server.sh update
+
+# Restart in AOT mode
+./manage-hytale-server.sh start aot
+```
+
+### Scenario 5: Backup Before Maintenance
+
+```bash
+# Create backup
+./manage-hytale-server.sh backup
+
+# Stop server
+./manage-hytale-server.sh stop
+
+# Perform maintenance...
+
+# Restart
+./manage-hytale-server.sh start normal
+```
+
+### Scenario 6: Using Environment Variables
+
+```bash
+# Start with more memory (temporary)
+JAVA_OPTS="-Xmx16G -Xms8G" ./manage-hytale-server.sh start normal
+
+# Download pre-release version
+PATCHLINE=pre-release ./manage-hytale-server.sh update
+```
+
+---
+
 ## 🧩 Mod Management
 
 ### Installing Mods
 
-1. Place `.jar` or `.zip` files in `Server/mods/`
+1. Place `.jar` files in `Server/mods/`
 2. Restart the server
+
+```bash
+# Copy a mod
+cp my-mod.jar Server/mods/
+
+# Restart
+./manage-hytale-server.sh restart normal
+```
 
 ### Automatic Manifest Extraction
 
@@ -329,6 +421,44 @@ On startup, the script:
 1. Extracts `manifest.json` from each `.jar` file
 2. Saves to `Mods-Manifest/`
 3. Creates a summary file `mods_summary.txt`
+
+### Displaying Mods
+
+```bash
+./manage-hytale-server.sh status
+```
+
+Example output:
+
+```
+[INFO] Installed mods:
+
+  NAME                                VERSION              DESCRIPTION
+  ─────────────────────────────────── ──────────────────── ─────────────────────────────────────────────
+  LevelingCore                        0.2.0                A modern, flexible leveling system for Hyt...
+  Hybrid                              1.5                  Hybrid is a mod library that contains com...
+  MultipleHUD                         1.0.1                A simple mod that allows you to have mult...
+  Party Plugin                        1.3.8                Create parties with friends, see their hp...
+  AdvancedItemInfo                    1.0.4                Adds a command to open a GUI with all the...
+  EyeSpy                              2026.1.14-55560      -
+  AutoAnnounce                        1.1.1                Automatically broadcasts announcements to...
+  Overstacked                         2026.1.12-30731      Configure the max stack size of items!
+
+[INFO] Total: 8 mod(s) - Manifests: /root/hytale/Mods-Manifest/
+```
+
+### Removing Mods
+
+```bash
+# Stop server
+./manage-hytale-server.sh stop
+
+# Remove mod
+rm Server/mods/my-mod.jar
+
+# Restart
+./manage-hytale-server.sh start normal
+```
 
 ---
 
@@ -379,6 +509,157 @@ crontab -e
 
 # Backup every 6 hours
 0 */6 * * * /root/hytale/manage-hytale-server.sh backup
+```
+
+---
+
+## 🔍 Troubleshooting
+
+### Server Won't Start
+
+**Check logs:**
+```bash
+cat Logs/server.log
+```
+
+**Common causes:**
+- Insufficient memory → Increase `JAVA_MEMORY`
+- Port already in use → Change port
+- Corrupted files → Reinstall with `./manage-hytale-server.sh install`
+
+### Authentication Error
+
+```bash
+# Remove credentials
+rm Config/.hytale-downloader-credentials.json
+
+# Reinstall
+./manage-hytale-server.sh install
+```
+
+### Server Stops Unexpectedly
+
+**Check memory:**
+```bash
+free -h
+```
+
+**Check logs:**
+```bash
+tail -100 Logs/server.log
+```
+
+**Increase memory:**
+```bash
+nano Config/server.conf
+# JAVA_MEMORY="-Xmx8G -Xms4G"
+```
+
+### Mods Not Displaying
+
+**Check jq is installed:**
+```bash
+apt-get install jq
+```
+
+**Check manifests:**
+```bash
+ls -lh Mods-Manifest/
+cat Mods-Manifest/mods_summary.txt
+```
+
+**Restart to regenerate:**
+```bash
+./manage-hytale-server.sh restart normal
+```
+
+### Permission Issues
+
+```bash
+# Set correct permissions
+chmod +x manage-hytale-server.sh
+chmod +x Download/hytale-downloader
+
+# Check ownership
+chown -R root:root /root/hytale
+```
+
+### Server Won't Stop
+
+```bash
+# Check PID
+cat .hytale-server.pid
+
+# Force stop manually
+kill -9 $(cat .hytale-server.pid)
+rm .hytale-server.pid
+```
+
+---
+
+## 📝 Important Notes
+
+### Security
+
+- ⚠️ Never share `Config/.hytale-downloader-credentials.json`
+- ⚠️ Regularly backup `Backups/initial_backup.tar.gz`
+- ⚠️ Use a firewall to limit access to server port
+
+### Performance
+
+- 💡 AOT mode is recommended for frequent restarts
+- 💡 Allocate at least 4GB RAM for stable server
+- 💡 Use SSD for better performance
+
+### Maintenance
+
+- 🔄 Check for updates regularly
+- 🔄 Clean old logs: `rm Logs/server.log.old`
+- 🔄 Check disk space: `df -h`
+
+---
+
+## 🆘 Support
+
+### Useful Logs
+
+```bash
+# Server logs
+cat Logs/server.log
+
+# Last lines
+tail -50 Logs/server.log
+
+# Real-time logs
+./manage-hytale-server.sh logs
+```
+
+### System Information
+
+```bash
+# Java version
+java -version
+
+# Available memory
+free -h
+
+# Disk space
+df -h
+
+# Server process
+ps aux | grep -i hytale
+```
+
+### Complete Reset
+
+```bash
+# WARNING: Deletes everything!
+./manage-hytale-server.sh stop
+cd /root
+rm -rf hytale
+mkdir hytale
+cd hytale
+# Copy script and start over
 ```
 
 ---

@@ -1,12 +1,12 @@
 #!/bin/bash
 
 ################################################################################
-# Script de gestion automatique du serveur Hytale
-# Auteur: Script optimisé pour la gestion complète du serveur
+# Hytale Server Management Script
+# Author: Optimized script for complete server management
 # Version: 2.0
 ################################################################################
 
-set -euo pipefail  # Arrêt en cas d'erreur, variables non définies, erreurs dans pipes
+set -euo pipefail  # Stop on error, undefined variables, errors in pipes
 
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,10 +21,10 @@ readonly ASSETS_ZIP="$SERVER_DIR/Assets.zip"
 readonly PID_FILE="$SCRIPT_DIR/.hytale-server.pid"
 readonly MODS_MANIFEST_DIR="$SCRIPT_DIR/Mods-Manifest"
 
-# Créer les répertoires nécessaires
+# Create necessary directories
 mkdir -p "$CONFIG_DIR" "$DOWNLOAD_DIR" "$MODS_MANIFEST_DIR"
 
-# Couleurs (définies tôt pour les migrations)
+# Colors (defined early for migrations)
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -32,36 +32,36 @@ readonly BLUE='\033[0;34m'
 readonly CYAN='\033[0;36m'
 readonly NC='\033[0m'
 
-# Fonctions de logging (définies tôt)
+# Logging functions (defined early)
 log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 log_step() { echo -e "${CYAN}[STEP]${NC} $*"; }
 
-# Migration : déplacer les fichiers de configuration vers Config/ si nécessaire
+# Migration: move configuration files to Config/ if necessary
 [ -f "$SCRIPT_DIR/.hytale-downloader-credentials.json" ] && {
     mv "$SCRIPT_DIR/.hytale-downloader-credentials.json" "$CREDENTIALS_FILE"
-    log_info "Migration: credentials déplacé vers Config/"
+    log_info "Migration: credentials moved to Config/"
 }
 [ -f "$SCRIPT_DIR/server.conf" ] && {
     mv "$SCRIPT_DIR/server.conf" "$CONFIG_FILE"
-    log_info "Migration: server.conf déplacé vers Config/"
+    log_info "Migration: server.conf moved to Config/"
 }
 
-# Charger la configuration si elle existe
+# Load configuration if it exists
 if [ -f "$CONFIG_FILE" ]; then
-    log_info "Chargement de la configuration depuis: $CONFIG_FILE"
+    log_info "Loading configuration from: $CONFIG_FILE"
     source "$CONFIG_FILE"
 else
-    log_warning "Fichier de configuration non trouvé: $CONFIG_FILE"
-    log_warning "Utilisation des valeurs par défaut"
+    log_warning "Configuration file not found: $CONFIG_FILE"
+    log_warning "Using default values"
 fi
 
-# Valeurs par défaut si non définies dans server.conf
+# Default values if not defined in server.conf
 PATCHLINE="${PATCHLINE:-release}"
 
-# Fonction pour convertir un chemin relatif en absolu
+# Function to convert relative path to absolute
 to_absolute_path() {
     local path="$1"
     local default="$2"
@@ -72,20 +72,20 @@ to_absolute_path() {
     fi
 }
 
-# Convertir les chemins relatifs en chemins absolus
+# Convert relative paths to absolute paths
 BACKUP_DIR=$(to_absolute_path "${BACKUP_DIR:-}" "$SCRIPT_DIR/Backups")
 LOGS_DIR=$(to_absolute_path "${LOGS_DIR:-}" "$SCRIPT_DIR/Logs")
 LOG_FILE=$(to_absolute_path "${LOG_FILE:-}" "$LOGS_DIR/server.log")
 BACKUP_RETENTION="${BACKUP_RETENTION:-10}"
 
-# Construire JAVA_OPTS si non défini (depuis JAVA_MEMORY et JAVA_EXTRA_OPTS)
+# Build JAVA_OPTS if not defined (from JAVA_MEMORY and JAVA_EXTRA_OPTS)
 if [ -z "${JAVA_OPTS:-}" ]; then
     JAVA_MEMORY="${JAVA_MEMORY:--Xmx4G -Xms2G}"
     JAVA_EXTRA_OPTS="${JAVA_EXTRA_OPTS:---enable-native-access=ALL-UNNAMED}"
     JAVA_OPTS="$JAVA_MEMORY $JAVA_EXTRA_OPTS"
 fi
 
-# Construire SERVER_OPTS si non défini
+# Build SERVER_OPTS if not defined
 if [ -z "${SERVER_OPTS:-}" ]; then
     DISABLE_SENTRY="${DISABLE_SENTRY:---disable-sentry}"
     ACCEPT_EARLY_PLUGINS="${ACCEPT_EARLY_PLUGINS:---accept-early-plugin}"
@@ -96,7 +96,7 @@ if [ -z "${SERVER_OPTS:-}" ]; then
     SERVER_OPTS="$DISABLE_SENTRY $ACCEPT_EARLY_PLUGINS $AUTH_MODE $BIND_ADDRESS $AUTO_BACKUP $EXTRA_SERVER_OPTS"
 fi
 
-# Rendre les variables readonly après configuration
+# Make variables readonly after configuration
 readonly PATCHLINE
 readonly BACKUP_DIR
 readonly BACKUP_RETENTION
@@ -105,60 +105,46 @@ readonly LOG_FILE
 readonly JAVA_OPTS
 readonly SERVER_OPTS
 
-# Créer les répertoires nécessaires
+# Create necessary directories
 mkdir -p "$LOGS_DIR" "$BACKUP_DIR"
 
-# Fonction pour afficher l'aide
+# Function to display help
 show_help() {
-    cat << EOF
-${CYAN}═══════════════════════════════════════════════════════════════${NC}
-${GREEN}  Script de Gestion du Serveur Hytale v2.0${NC}
-${CYAN}═══════════════════════════════════════════════════════════════${NC}
-
-${YELLOW}Usage:${NC} $0 [COMMANDE] [OPTIONS]
-
-${YELLOW}Commandes:${NC}
-  ${GREEN}install${NC}              Installation complète depuis zéro
-  ${GREEN}start [normal|aot] [--port PORT]${NC}
-                       Démarre le serveur
-                       - normal: Mode standard
-                       - aot: Avec cache AOT (démarrage plus rapide)
-  ${GREEN}stop${NC}                 Arrête le serveur
-  ${GREEN}restart [normal|aot] [--port PORT]${NC}
-                       Redémarre le serveur
-  ${GREEN}update${NC}               Met à jour le serveur
-  ${GREEN}backup${NC}               Sauvegarde les données du serveur
-                       (mods, universe, bans, permissions, whitelist)
-  ${GREEN}backup-initial${NC}       Sauvegarde initiale des credentials
-                       (créée automatiquement, une seule fois)
-  ${GREEN}status${NC}               Affiche l'état du serveur
-  ${GREEN}logs${NC}                 Affiche les logs en temps réel
-  ${GREEN}help${NC}                 Affiche cette aide
-
-${YELLOW}Options:${NC}
-  --port PORT         Change le port du serveur (défaut: 5520)
-
-${YELLOW}Variables d'environnement:${NC}
-  PATCHLINE       Patchline (release|pre-release, défaut: release)
-  JAVA_OPTS       Options JVM (défaut: -Xmx4G -Xms2G)
-  SERVER_OPTS     Options du serveur Hytale
-
-${YELLOW}Exemples:${NC}
-  $0 install
-  $0 start normal
-  $0 start aot                    # Avec cache AOT (plus rapide)
-  $0 start normal --port 25565
-  $0 restart aot --port 5521
-  JAVA_OPTS="-Xmx8G -Xms4G" $0 start
-  PATCHLINE=pre-release $0 update
-
-${CYAN}═══════════════════════════════════════════════════════════════${NC}
-EOF
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  Hytale Server Management Script v2.0${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC} $0 [COMMAND] [OPTIONS]"
+    echo ""
+    echo -e "${YELLOW}Commands:${NC}"
+    echo -e "  ${GREEN}install${NC}              Complete installation from scratch"
+    echo -e "  ${GREEN}start [normal|aot] [--port PORT]${NC}"
+    echo -e "                       Start server (normal or AOT mode)"
+    echo -e "  ${GREEN}stop${NC}                 Stop server"
+    echo -e "  ${GREEN}restart [normal|aot] [--port PORT]${NC}"
+    echo -e "                       Restart server"
+    echo -e "  ${GREEN}update${NC}               Update server"
+    echo -e "  ${GREEN}backup${NC}               Backup server data"
+    echo -e "  ${GREEN}backup-initial${NC}       Initial credentials backup"
+    echo -e "  ${GREEN}status${NC}               Show server status"
+    echo -e "  ${GREEN}logs${NC}                 Show real-time logs"
+    echo -e "  ${GREEN}help${NC}                 Show this help"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  --port PORT         Custom port (default: 5520)"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 install"
+    echo -e "  $0 start aot"
+    echo -e "  $0 start normal --port 25565"
+    echo -e "  JAVA_OPTS=\"-Xmx8G -Xms4G\" $0 start"
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 }
 
-# Vérifier les dépendances
+# Check dependencies
 check_dependencies() {
-    log_step "Vérification des dépendances..."
+    log_step "Checking dependencies..."
     local missing_deps=()
     
     for cmd in unzip java wget; do
@@ -166,32 +152,29 @@ check_dependencies() {
     done
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        log_error "Dépendances manquantes: ${missing_deps[*]}"
-        log_info "Installation: apt-get install ${missing_deps[*]}"
+        log_error "Missing dependencies: ${missing_deps[*]}"
+        log_info "Install with: apt-get install ${missing_deps[*]}"
         exit 1
     fi
     
-    log_success "Toutes les dépendances sont installées"
+    log_success "All dependencies are installed"
 }
 
-# Télécharger un fichier
+# Download a file
 download_file() {
     local url=$1
     local output=$2
     
     if command -v wget &>/dev/null; then
         wget -q --show-progress -O "$output" "$url"
-    elif command -v curl &>/dev/null; then
-        curl -L -o "$output" "$url" --progress-bar
     else
-        log_error "wget ou curl requis"
-        exit 1
+        curl -L -o "$output" "$url" --progress-bar
     fi
 }
 
-# Installer hytale-downloader
+# Install hytale-downloader
 install_downloader() {
-    log_step "Installation du hytale-downloader..."
+    log_step "Installing hytale-downloader..."
     
     local temp_zip="$DOWNLOAD_DIR/hytale-downloader-temp.zip"
     local temp_dir="$DOWNLOAD_DIR/hytale-downloader-temp"
@@ -204,7 +187,7 @@ install_downloader() {
     local binary=$(find "$temp_dir" -type f -name "hytale-downloader*" ! -name "*.exe" ! -name "*.md" | head -n 1)
     
     if [ -z "$binary" ]; then
-        log_error "Binaire hytale-downloader non trouvé"
+        log_error "hytale-downloader binary not found"
         rm -rf "$temp_dir" "$temp_zip"
         exit 1
     fi
@@ -213,16 +196,16 @@ install_downloader() {
     chmod +x "$DOWNLOADER_BIN"
     rm -rf "$temp_dir" "$temp_zip"
     
-    log_success "hytale-downloader installé dans: $DOWNLOAD_DIR/"
+    log_success "hytale-downloader installed in: $DOWNLOAD_DIR/"
 }
 
-# Créer une sauvegarde initiale (credentials et configs)
+# Create initial backup (credentials and configs)
 backup_initial() {
     local backup_file="$BACKUP_DIR/initial_backup.tar.gz"
     
-    [ -f "$backup_file" ] && { log_info "Backup initial existe déjà"; return 0; }
+    [ -f "$backup_file" ] && { log_info "Initial backup already exists"; return 0; }
     
-    log_step "Création du backup initial (credentials et configs)..."
+    log_step "Creating initial backup (credentials and configs)..."
     
     local files_to_backup=()
     local files_found=()
@@ -242,17 +225,17 @@ backup_initial() {
     done
     
     if [ ${#files_to_backup[@]} -eq 0 ]; then
-        log_warning "Aucun fichier de configuration à sauvegarder"
+        log_warning "No configuration files to backup"
         return
     fi
     
     tar -czf "$backup_file" -C "$SCRIPT_DIR" "${files_to_backup[@]}" 2>/dev/null || true
-    log_success "Backup initial créé ($(du -h "$backup_file" 2>/dev/null | cut -f1)): ${files_found[*]}"
+    log_success "Initial backup created ($(du -h "$backup_file" 2>/dev/null | cut -f1)): ${files_found[*]}"
 }
 
-# Créer une sauvegarde des données du serveur
+# Create server data backup
 backup_server_data() {
-    log_step "Création d'une sauvegarde des données du serveur..."
+    log_step "Creating server data backup..."
     
     mkdir -p "$BACKUP_DIR"
     
@@ -271,69 +254,58 @@ backup_server_data() {
     [ -d "$SERVER_DIR/universe" ] && dirs_to_backup+=("Server/universe")
     
     if [ ${#files_to_backup[@]} -eq 0 ] && [ ${#dirs_to_backup[@]} -eq 0 ]; then
-        log_warning "Aucune donnée serveur à sauvegarder"
-        log_info "Fichiers recherchés: bans.json, permissions.json, whitelist.json"
-        log_info "Répertoires recherchés: mods/, universe/"
+        log_warning "No server data to backup"
+        log_info "Files searched: bans.json, permissions.json, whitelist.json"
+        log_info "Directories searched: mods/, universe/"
         return
     fi
     
-    # Combiner fichiers et répertoires
+    # Combine files and directories
     local all_items=("${files_to_backup[@]}" "${dirs_to_backup[@]}")
     
     tar -czf "$backup_file" -C "$SCRIPT_DIR" "${all_items[@]}" 2>/dev/null || true
     
     local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
-    log_success "Sauvegarde créée: $backup_file ($backup_size)"
+    log_success "Backup created: $backup_file ($backup_size)"
     
     if [ ${#files_to_backup[@]} -gt 0 ]; then
-        log_info "Fichiers: ${files_to_backup[*]}"
+        log_info "Files: ${files_to_backup[*]}"
     fi
     if [ ${#dirs_to_backup[@]} -gt 0 ]; then
-        log_info "Répertoires: ${dirs_to_backup[*]}"
+        log_info "Directories: ${dirs_to_backup[*]}"
     fi
     
-    # Garder les N dernières sauvegardes (défini dans server.conf)
+    # Keep the last N backups (defined in server.conf)
     local retention=$((BACKUP_RETENTION + 1))
     ls -t "$BACKUP_DIR"/server_backup_*.tar.gz 2>/dev/null | tail -n +$retention | xargs -r rm
     
     local remaining=$(ls -1 "$BACKUP_DIR"/server_backup_*.tar.gz 2>/dev/null | wc -l)
-    log_info "Sauvegardes conservées: $remaining/$BACKUP_RETENTION"
+    log_info "Backups kept: $remaining/$BACKUP_RETENTION"
 }
 
-# Afficher les instructions d'authentification
+# Display authentication instructions
 show_auth_instructions() {
-    log_warning "Première utilisation - Authentification OAuth2 requise"
+    log_warning "First use - OAuth2 authentication required"
     echo ""
-    log_info "═══════════════════════════════════════════════════════════════"
-    log_info "  AUTHENTIFICATION OAUTH2"
-    log_info "═══════════════════════════════════════════════════════════════"
-    echo ""
-    log_info "Le hytale-downloader va afficher:"
-    log_info "  • Une URL à ouvrir dans votre navigateur"
-    log_info "  • Un code d'autorisation"
-    echo ""
-    log_info "Procédure:"
-    log_info "  1. Ouvrez l'URL dans votre navigateur"
-    log_info "  2. Connectez-vous avec votre compte Hytale"
-    log_info "  3. Entrez le code affiché"
-    log_info "  4. Le téléchargement démarrera automatiquement"
-    echo ""
-    log_info "═══════════════════════════════════════════════════════════════"
+    log_info "The hytale-downloader will display a URL and code"
+    log_info "1. Open the URL in your browser"
+    log_info "2. Log in with your Hytale account"
+    log_info "3. Enter the code"
     echo ""
 }
 
-# Télécharger le serveur
+# Download the server
 download_server() {
-    log_step "Téléchargement du serveur Hytale (patchline: $PATCHLINE)..."
+    log_step "Downloading Hytale server (patchline: $PATCHLINE)..."
     
     [ ! -f "$DOWNLOADER_BIN" ] && install_downloader
     
     [ ! -f "$CREDENTIALS_FILE" ] && show_auth_instructions
     
-    # Créer le backup initial si nécessaire
+    # Create initial backup if necessary
     backup_initial
     
-    # Sauvegarder temporairement les fichiers de configuration
+    # Temporarily backup configuration files
     local -a backup_files=()
     for file in auth.enc config.json; do
         [ -f "$SERVER_DIR/$file" ] && {
@@ -341,83 +313,73 @@ download_server() {
             backup_files+=("$file")
         }
     done
-    [ ${#backup_files[@]} -gt 0 ] && log_info "Sauvegarde temporaire: ${backup_files[*]}"
+    [ ${#backup_files[@]} -gt 0 ] && log_info "Temporary backup: ${backup_files[*]}"
     
     local download_path="$DOWNLOAD_DIR/hytale-server-latest.zip"
     
-    [ ! -f "$CREDENTIALS_FILE" ] && log_info "Lancement de l'authentification..." || log_info "Téléchargement..."
+    [ ! -f "$CREDENTIALS_FILE" ] && log_info "Starting authentication..." || log_info "Downloading..."
     echo ""
     
-    # Télécharger avec gestion d'erreur
+    # Download with error handling
     set +e
-    "$DOWNLOADER_BIN" -credentials-path "$CREDENTIALS_FILE" -download-path "$download_path" -patchline "$PATCHLINE"
+    "$DOWNLOADER_BIN" -credentials-path "$CREDENTIALS_FILE" -download-path "$download_path" -patchline "$PATCHLINE" -skip-update-check
     local exit_code=$?
     set -e
     
     if [ $exit_code -ne 0 ]; then
         echo ""
-        log_error "Échec du téléchargement (code: $exit_code)"
+        log_error "Download failed (code: $exit_code)"
         echo ""
         log_info "Solutions:"
-        log_info "  1. Erreur d'authentification: rm $CREDENTIALS_FILE && $0 install"
-        log_info "  2. Vérifiez votre connexion internet"
-        log_info "  3. Vérifiez l'accès de votre compte Hytale"
-        log_info "  4. Fichiers téléchargés dans: $DOWNLOAD_DIR/"
+        log_info "  1. Authentication error: rm $CREDENTIALS_FILE && $0 install"
+        log_info "  2. Check your internet connection"
+        log_info "  3. Check your Hytale account access"
+        log_info "  4. Downloaded files in: $DOWNLOAD_DIR/"
         exit 1
     fi
     
-    [ ! -f "$download_path" ] && { log_error "Fichier téléchargé introuvable"; exit 1; }
+    [ ! -f "$download_path" ] && { log_error "Downloaded file not found"; exit 1; }
     
     echo ""
-    log_info "Extraction de l'archive..."
+    log_info "Extracting archive..."
     unzip -q -o "$download_path" -d "$SCRIPT_DIR"
     
-    # Déplacer Assets.zip
+    # Move Assets.zip
     if [ -f "$SCRIPT_DIR/Assets.zip" ]; then
         mkdir -p "$SERVER_DIR"
         mv "$SCRIPT_DIR/Assets.zip" "$ASSETS_ZIP"
-        log_success "Assets.zip déplacé dans Server/"
+        log_success "Assets.zip moved to Server/"
     fi
     
-    # Restaurer les fichiers de configuration
+    # Restore configuration files
     mkdir -p "$SERVER_DIR"
     for file in auth.enc config.json; do
         [ -f "$SCRIPT_DIR/${file}.backup" ] && {
             mv "$SCRIPT_DIR/${file}.backup" "$SERVER_DIR/$file"
-            log_success "$file restauré"
+            log_success "$file restored"
         }
     done
     
     rm -f "$download_path"
-    log_success "Serveur installé avec succès"
+    log_success "Server installed successfully"
 }
 
-# Installation complète
+# Complete installation
 install_complete() {
-    log_info "═══════════════════════════════════════════════════════════════"
-    log_info "  Installation complète du serveur Hytale"
-    log_info "═══════════════════════════════════════════════════════════════"
+    log_info "Complete Hytale Server Installation"
     echo ""
-    
     check_dependencies
     echo ""
     install_downloader
     echo ""
     download_server
     echo ""
-    
-    log_success "═══════════════════════════════════════════════════════════════"
-    log_success "  Installation terminée!"
-    log_success "═══════════════════════════════════════════════════════════════"
-    echo ""
-    log_info "Prochaines étapes:"
-    log_info "  • Démarrer: $0 start normal"
-    log_info "  • Ou mode AOT: $0 start aot"
-    log_info "  • Voir les logs: $0 logs"
+    log_success "Installation completed!"
+    log_info "Start: $0 start aot"
     echo ""
 }
 
-# Vérifier si le serveur est en cours d'exécution
+# Check if server is running
 is_server_running() {
     [ -f "$PID_FILE" ] || return 1
     
@@ -430,72 +392,70 @@ is_server_running() {
     fi
 }
 
-# Obtenir le statut du serveur
+# Get server status
 get_status() {
-    log_step "État du serveur..."
+    log_step "Server status..."
     echo ""
     
     if is_server_running; then
         local pid=$(cat "$PID_FILE")
-        log_success "Serveur EN COURS D'EXÉCUTION (PID: $pid)"
+        log_success "Server RUNNING (PID: $pid)"
         
-        if command -v ps &>/dev/null; then
-            echo ""
-            log_info "Informations du processus:"
-            ps -p "$pid" -o pid,ppid,cmd,%mem,%cpu,etime 2>/dev/null || true
-        fi
+        echo ""
+        log_info "Process info:"
+        ps -p "$pid" -o pid,ppid,cmd,%mem,%cpu,etime 2>/dev/null || true
     else
-        log_warning "Serveur ARRÊTÉ"
+        log_warning "Server STOPPED"
     fi
     
-    # Afficher les mods installés
+    # Display installed mods
     show_installed_mods
 }
 
-# Arrêter le serveur
+# Stop the server
 stop_server() {
-    log_step "Arrêt du serveur..."
+    log_step "Stopping server..."
     
     if ! is_server_running; then
-        log_warning "Le serveur n'est pas en cours d'exécution"
+        log_warning "Server is not running"
         return 0
     fi
     
     local pid=$(cat "$PID_FILE")
-    log_info "Envoi du signal d'arrêt au processus $pid..."
+    log_info "Sending stop signal to process $pid..."
     
     kill "$pid" 2>/dev/null || true
     
-    # Attendre l'arrêt (max 30 secondes)
+    # Wait for shutdown (max 30 seconds)
     local count=0
     while ps -p "$pid" &>/dev/null && [ $count -lt 30 ]; do
         sleep 1
-        ((count++))
+        count=$((count + 1))
         echo -n "."
     done
     echo ""
     
-    # Arrêt forcé si nécessaire
+    # Force stop if necessary
     if ps -p "$pid" &>/dev/null; then
-        log_warning "Arrêt forcé..."
+        log_warning "Force stopping..."
         kill -9 "$pid" 2>/dev/null || true
         sleep 1
     fi
     
     rm -f "$PID_FILE"
-    log_success "Serveur arrêté"
+    log_success "Server stopped"
 }
 
-# Extraire les manifests des mods
+# Extract mod manifests
 extract_mod_manifests() {
-    log_step "Extraction des manifests des mods..."
+    log_step "Extracting mod manifests..."
     
     if [ ! -d "$SERVER_DIR/mods" ]; then
-        log_info "Aucun répertoire mods trouvé"
+        log_info "No mods directory found"
         return 0
     fi
     
-    # Nettoyer le répertoire des manifests
+    # Clean manifests directory
     rm -rf "$MODS_MANIFEST_DIR" 2>/dev/null || true
     mkdir -p "$MODS_MANIFEST_DIR"
     
@@ -503,30 +463,30 @@ extract_mod_manifests() {
     local jar_count=0
     local summary_file="$MODS_MANIFEST_DIR/mods_summary.txt"
     
-    # Créer le fichier récapitulatif
-    echo "# Mods installés - Généré le $(date '+%Y-%m-%d %H:%M:%S')" > "$summary_file"
+    # Create summary file
+    echo "# Installed mods - Generated on $(date '+%Y-%m-%d %H:%M:%S')" > "$summary_file"
     echo "# Format: NOM|VERSION|DESCRIPTION" >> "$summary_file"
     
-    # Désactiver temporairement l'arrêt sur erreur pour l'extraction
+    # Temporarily disable stop on error for extraction
     set +e
     
-    # Chercher tous les fichiers .jar dans mods/
+    # Search for all .jar files in mods/
     for jar_file in "$SERVER_DIR/mods"/*.jar; do
-        # Vérifier que le fichier existe (au cas où aucun .jar)
+        # Check if file exists (in case no .jar)
         [ -f "$jar_file" ] || continue
         
-        ((jar_count++))
+        jar_count=$((jar_count + 1))
         local jar_name=$(basename "$jar_file" .jar)
         local output_file="$MODS_MANIFEST_DIR/${jar_name}.json"
         
-        # Extraire manifest.json du jar
+        # Extract manifest.json from jar
         unzip -p "$jar_file" manifest.json > "$output_file" 2>/dev/null
         
-        # Vérifier que le fichier n'est pas vide
+        # Check if file is not empty
         if [ -s "$output_file" ]; then
-            ((count++))
+            count=$((count + 1))
             
-            # Extraire les infos et les ajouter au fichier récapitulatif
+            # Extract info and add to summary file
             if command -v jq &>/dev/null; then
                 local name=$(jq -r '.Name // "N/A"' "$output_file" 2>/dev/null)
                 local version=$(jq -r '.Version // "N/A"' "$output_file" 2>/dev/null)
@@ -538,11 +498,11 @@ extract_mod_manifests() {
         fi
     done
     
-    # Copier aussi le manifest.json direct s'il existe
+    # Also copy direct manifest.json if it exists
     if [ -f "$SERVER_DIR/mods/manifest.json" ]; then
         cp "$SERVER_DIR/mods/manifest.json" "$MODS_MANIFEST_DIR/mods_root.json" 2>/dev/null || true
         if [ -s "$MODS_MANIFEST_DIR/mods_root.json" ]; then
-            ((count++))
+            count=$((count + 1))
             
             if command -v jq &>/dev/null; then
                 local name=$(jq -r '.Name // "N/A"' "$MODS_MANIFEST_DIR/mods_root.json" 2>/dev/null)
@@ -553,30 +513,30 @@ extract_mod_manifests() {
         fi
     fi
     
-    # Réactiver l'arrêt sur erreur
+    # Re-enable stop on error
     set -e
     
     if [ $count -gt 0 ]; then
-        log_success "$count manifest(s) extrait(s) sur $jar_count fichier(s) .jar"
+        log_success "$count manifest(s) extracted from $jar_count .jar file(s)"
     else
         if [ $jar_count -gt 0 ]; then
-            log_warning "Aucun manifest trouvé dans les $jar_count fichier(s) .jar"
+            log_warning "No manifest found in $jar_count .jar file(s)"
         else
-            log_info "Aucun fichier .jar trouvé dans Server/mods/"
+            log_info "No .jar files found in Server/mods/"
         fi
     fi
 }
 
-# Afficher les mods installés
+# Display installed mods
 show_installed_mods() {
     echo ""
-    log_info "Mods installés:"
+    log_info "Installed mods:"
     
     local summary_file="$MODS_MANIFEST_DIR/mods_summary.txt"
     
     if [ ! -f "$summary_file" ]; then
-        echo "  Aucun mod détecté"
-        echo "  Astuce: Démarrez le serveur pour extraire les manifests"
+        echo "  No mods detected"
+        echo "  Tip: Start the server to extract manifests"
         return
     fi
     
@@ -586,11 +546,11 @@ show_installed_mods() {
     
     local mod_count=0
     
-    # Lire le fichier récapitulatif ligne par ligne
+    # Read summary file line by line
     while IFS='|' read -r name version description; do
         [[ "$name" =~ ^# ]] && continue
         
-        # Nettoyer et formater la description
+        # Clean and format description
         description=$(echo "$description" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         [ -z "$description" ] && description="-"
         [ ${#description} -gt 45 ] && description="${description:0:42}..."
@@ -603,51 +563,51 @@ show_installed_mods() {
     log_info "Total: $mod_count mod(s) - Manifests: $MODS_MANIFEST_DIR/"
 }
 
-# Démarrer le serveur
+# Start the server
 start_server() {
     local mode="${1:-normal}"
     local port="${2:-}"
     
-    log_step "Démarrage du serveur en mode $mode..."
+    log_step "Starting server in $mode mode..."
     
-    # Vérifications
+    # Checks
     if is_server_running; then
-        log_error "Le serveur est déjà en cours d'exécution (PID: $(cat "$PID_FILE"))"
-        log_info "Utilisez: $0 stop"
+        log_error "Server is already running (PID: $(cat "$PID_FILE"))"
+        log_info "Use: $0 stop"
         exit 1
     fi
     
     if [ ! -f "$SERVER_DIR/HytaleServer.jar" ]; then
-        log_error "HytaleServer.jar non trouvé"
-        log_info "Exécutez: $0 install"
+        log_error "HytaleServer.jar not found"
+        log_info "Run: $0 install"
         exit 1
     fi
     
     if [ "$mode" = "aot" ] && [ ! -f "$SERVER_DIR/HytaleServer.aot" ]; then
-        log_warning "HytaleServer.aot non trouvé, démarrage en mode normal"
+        log_warning "HytaleServer.aot not found, starting in normal mode"
         mode="normal"
     fi
     
-    # Configuration depuis server.conf
+    # Configuration from server.conf
     local java_opts="$JAVA_OPTS"
     local assets_path="${ASSETS_ZIP}"
     [ ! -f "$assets_path" ] && assets_path="$SCRIPT_DIR/HytaleAssets"
     
-    # Construire les options du serveur avec les assets
+    # Build server options with assets
     local server_opts="--assets $assets_path $SERVER_OPTS"
     
-    # Ajouter le port si spécifié
+    # Add port if specified
     if [ -n "$port" ]; then
-        # Valider le port
+        # Validate port
         if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; then
             server_opts="$server_opts --bind 0.0.0.0:$port"
-            log_info "Port personnalisé: $port"
+            log_info "Custom port: $port"
         else
-            log_error "Port invalide: $port (doit être entre 1024 et 65535)"
+            log_error "Invalid port: $port (must be between 1024 and 65535)"
             exit 1
         fi
     else
-        log_info "Port par défaut: 5520"
+        log_info "Default port: 5520"
     fi
     
     log_info "Mode: $mode"
@@ -656,49 +616,49 @@ start_server() {
     log_info "Options: $server_opts"
     echo ""
     
-    # Extraire les manifests des mods
+    # Extract mod manifests
     extract_mod_manifests
     echo ""
     
-    # S'assurer que le répertoire de logs existe
+    # Ensure logs directory exists
     mkdir -p "$LOGS_DIR"
     
     cd "$SERVER_DIR"
     
-    # Démarrer selon le mode
+    # Start according to mode
     if [ "$mode" = "aot" ]; then
-        log_info "Démarrage avec cache AOT (JEP-514)..."
-        log_info "Avantages: Démarrage plus rapide, pas de JIT warmup"
+        log_info "Starting with AOT cache (JEP-514)..."
+        log_info "Benefits: Faster startup, no JIT warmup"
         nohup java -XX:AOTCache=HytaleServer.aot $java_opts -jar HytaleServer.jar $server_opts >> "$LOG_FILE" 2>&1 &
     else
-        log_info "Démarrage en mode normal..."
+        log_info "Starting in normal mode..."
         nohup java $java_opts -jar HytaleServer.jar $server_opts >> "$LOG_FILE" 2>&1 &
     fi
     
     local pid=$!
     echo "$pid" > "$PID_FILE"
     
-    # Vérifier le démarrage
+    # Check startup
     sleep 2
     
     if ps -p "$pid" &>/dev/null; then
-        log_success "Serveur démarré (PID: $pid)"
+        log_success "Server started (PID: $pid)"
         log_info "Logs: tail -f $LOG_FILE"
-        log_info "Arrêt: $0 stop"
+        log_info "Stop: $0 stop"
     else
-        log_error "Le serveur n'a pas pu démarrer"
-        log_info "Consultez: cat $LOG_FILE"
+        log_error "Server failed to start"
+        log_info "Check: cat $LOG_FILE"
         rm -f "$PID_FILE"
         exit 1
     fi
 }
 
-# Redémarrer le serveur
+# Restart the server
 restart_server() {
     local mode="${1:-normal}"
     local port="${2:-}"
     
-    log_step "Redémarrage du serveur..."
+    log_step "Restarting server..."
     
     if is_server_running; then
         stop_server
@@ -709,14 +669,14 @@ restart_server() {
     start_server "$mode" "$port"
 }
 
-# Mettre à jour le serveur
+# Update the server
 update_server() {
-    log_step "Mise à jour du serveur..."
+    log_step "Updating server..."
     echo ""
     
     if is_server_running; then
-        log_error "Le serveur est en cours d'exécution"
-        log_info "Arrêtez-le: $0 stop"
+        log_error "Server is running"
+        log_info "Stop it: $0 stop"
         exit 1
     fi
     
@@ -726,32 +686,24 @@ update_server() {
     download_server
     echo ""
     
-    log_success "Mise à jour terminée"
-    log_info "Redémarrez: $0 start"
+    log_success "Update completed"
+    log_info "Restart: $0 start"
 }
 
-# Afficher les logs
+# Display logs
 show_logs() {
     if [ ! -f "$LOG_FILE" ]; then
-        log_warning "Fichier de logs introuvable: $LOG_FILE"
-        log_info "Répertoire des logs: $LOGS_DIR"
-        
-        # Lister les fichiers de logs disponibles
-        if [ -d "$LOGS_DIR" ] && [ "$(ls -A "$LOGS_DIR" 2>/dev/null)" ]; then
-            echo ""
-            log_info "Fichiers de logs disponibles:"
-            ls -lh "$LOGS_DIR"
-        fi
+        log_warning "Log file not found: $LOG_FILE"
+        [ -d "$LOGS_DIR" ] && ls -lh "$LOGS_DIR" 2>/dev/null
         return
     fi
     
-    log_info "Affichage des logs (Ctrl+C pour quitter)..."
-    log_info "Fichier: $LOG_FILE"
+    log_info "Displaying logs (Ctrl+C to quit): $LOG_FILE"
     echo ""
     tail -f "$LOG_FILE"
 }
 
-# Fonction principale
+# Main function
 main() {
     local command="${1:-help}"
     shift || true
@@ -764,16 +716,11 @@ main() {
             local mode="normal"
             local port=""
             
-            # Parser les arguments
+            # Parse arguments
             while [ $# -gt 0 ]; do
                 case "$1" in
                     normal|aot)
                         mode="$1"
-                        shift
-                        ;;
-                    compiled)
-                        log_warning "'compiled' est obsolète, utilisez 'aot'"
-                        mode="aot"
                         shift
                         ;;
                     --port)
@@ -781,8 +728,8 @@ main() {
                         shift 2
                         ;;
                     *)
-                        log_error "Option invalide: $1"
-                        log_info "Modes disponibles: normal, aot"
+                        log_error "Invalid option: $1"
+                        log_info "Available modes: normal, aot"
                         exit 1
                         ;;
                 esac
@@ -797,16 +744,11 @@ main() {
             local mode="normal"
             local port=""
             
-            # Parser les arguments
+            # Parse arguments
             while [ $# -gt 0 ]; do
                 case "$1" in
                     normal|aot)
                         mode="$1"
-                        shift
-                        ;;
-                    compiled)
-                        log_warning "'compiled' est obsolète, utilisez 'aot'"
-                        mode="aot"
                         shift
                         ;;
                     --port)
@@ -814,7 +756,7 @@ main() {
                         shift 2
                         ;;
                     *)
-                        log_error "Option invalide: $1"
+                        log_error "Invalid option: $1"
                         exit 1
                         ;;
                 esac
@@ -841,7 +783,7 @@ main() {
             show_help
             ;;
         *)
-            log_error "Commande inconnue: $command"
+            log_error "Unknown command: $command"
             echo ""
             show_help
             exit 1
@@ -849,5 +791,5 @@ main() {
     esac
 }
 
-# Exécution
+# Execution
 main "$@"
