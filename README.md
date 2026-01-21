@@ -9,6 +9,7 @@
 - [Configuration](#configuration)
 - [Available Commands](#available-commands)
 - [Usage Examples](#usage-examples)
+- [Screen Management](#screen-management)
 - [Mod Management](#mod-management)
 - [Backups](#backups)
 - [Troubleshooting](#troubleshooting)
@@ -20,13 +21,16 @@
 This Bash script provides automated management for a Hytale server with the following features:
 
 - ✅ Automatic server installation
-- ✅ Start/Stop/Restart operations
+- ✅ Start/Stop/Restart operations with **screen** support
+- ✅ **Interactive console** with attach/detach
 - ✅ AOT (Ahead-Of-Time) mode for faster startup
 - ✅ Automatic updates
 - ✅ Backup management
+- ✅ **World reset** (clear universe)
 - ✅ Mod extraction and display
 - ✅ External configuration
 - ✅ Log management
+- ✅ **Modular architecture** (8 function files)
 
 ---
 
@@ -40,7 +44,7 @@ This Bash script provides automated management for a Hytale server with the foll
 ```bash
 # Install dependencies
 apt-get update
-apt-get install -y unzip java wget jq
+apt-get install -y unzip java wget jq screen
 ```
 
 **Dependency details:**
@@ -48,6 +52,7 @@ apt-get install -y unzip java wget jq
 - `java`: Hytale server execution
 - `wget` or `curl`: File downloads
 - `jq`: JSON parsing (optional but recommended for mod display)
+- `screen`: Terminal multiplexer for interactive console
 
 ### Hytale Account
 - A valid Hytale account for OAuth2 authentication
@@ -87,15 +92,10 @@ During first installation, you'll see:
 ```
 [WARNING] First use - OAuth2 authentication required
 
-═══════════════════════════════════════════════════════════════
-  OAUTH2 AUTHENTICATION
-═══════════════════════════════════════════════════════════════
-
-Procedure:
+The hytale-downloader will display a URL and code
   1. Open the URL in your browser
   2. Log in with your Hytale account
-  3. Enter the displayed code
-  4. Download will start automatically
+  3. Enter the code
 ```
 
 **Important:** Credentials are saved in `Config/.hytale-downloader-credentials.json` and won't be requested again.
@@ -106,7 +106,16 @@ Procedure:
 
 ```
 /root/hytale/
-├── manage-hytale-server.sh          # Main script
+├── manage-hytale-server.sh          # Main script (145 lines)
+├── Functions/                        # Modular functions (8 files)
+│   ├── config.sh                     # Configuration management
+│   ├── command.sh                    # Command routing
+│   ├── downloader.sh                 # Install/Update/Download
+│   ├── manager.sh                    # Start/Stop/Restart/Attach
+│   ├── status.sh                     # Status + Mods
+│   ├── backup.sh                     # Backups
+│   ├── clear.sh                      # World reset
+│   └── logs.sh                       # Log display
 ├── Config/                           # Configuration
 │   ├── server.conf                   # Script configuration
 │   └── .hytale-downloader-credentials.json  # OAuth2 credentials
@@ -221,11 +230,14 @@ Complete installation from scratch.
 ### Start
 
 ```bash
-# Normal mode
+# Normal mode (background with screen)
 ./manage-hytale-server.sh start normal
 
 # AOT mode (faster startup)
 ./manage-hytale-server.sh start aot
+
+# Interactive mode (foreground)
+./manage-hytale-server.sh start aot --interactive
 
 # With custom port
 ./manage-hytale-server.sh start normal --port 25565
@@ -233,12 +245,27 @@ Complete installation from scratch.
 
 **AOT Mode:** Uses Ahead-Of-Time cache (JEP-514) for faster startup without JIT warmup.
 
+**Interactive Mode:** Starts directly in the console (Ctrl+A then D to detach).
+
+### Attach to Console
+
+```bash
+./manage-hytale-server.sh attach
+```
+
+**Attach to the running server console** to:
+- Execute commands (`/help`, `/auth`, `/stop`, etc.)
+- See real-time output
+- Interact with the server
+
+**To detach:** Press `Ctrl+A` then `D` (server continues running)
+
 ### Stop
 
 ```bash
 ./manage-hytale-server.sh stop
 ```
-Stops the server gracefully (max 30 seconds wait, then forced stop if needed).
+Stops the server gracefully by sending `stop` command to console (max 30 seconds wait, then forced stop if needed).
 
 ### Restart
 
@@ -266,6 +293,17 @@ This command will:
 4. Restore configuration files
 
 **Important:** Server must be stopped before updating.
+
+### Clear World
+
+```bash
+./manage-hytale-server.sh clear
+```
+
+**Deletes the universe directory** (world data):
+- Asks for confirmation (`yes` required)
+- Creates automatic backup before deletion
+- A new world will be generated on next start
 
 ### Backups
 
@@ -324,17 +362,45 @@ Display logs in real-time (Ctrl+C to quit).
 # Installation
 ./manage-hytale-server.sh install
 
-# Start in normal mode
-./manage-hytale-server.sh start normal
+# Start in AOT mode
+./manage-hytale-server.sh start aot
 
-# Check status
-./manage-hytale-server.sh status
+# Attach to console
+./manage-hytale-server.sh attach
 
-# View logs
-./manage-hytale-server.sh logs
+# Detach: Ctrl+A then D
 ```
 
-### Scenario 2: Change Allocated Memory
+### Scenario 2: Interactive Console Session
+
+```bash
+# Start in interactive mode
+./manage-hytale-server.sh start aot --interactive
+
+# You're now in the server console
+# Execute commands: /help, /auth, etc.
+
+# Detach: Ctrl+A then D
+# Server continues running in background
+
+# Reattach later
+./manage-hytale-server.sh attach
+```
+
+### Scenario 3: Reset World
+
+```bash
+# Stop server
+./manage-hytale-server.sh stop
+
+# Clear world (with confirmation)
+./manage-hytale-server.sh clear
+
+# Start fresh world
+./manage-hytale-server.sh start aot
+```
+
+### Scenario 4: Change Allocated Memory
 
 ```bash
 # Edit configuration
@@ -344,23 +410,10 @@ nano Config/server.conf
 JAVA_MEMORY="-Xmx8G -Xms4G"
 
 # Restart server
-./manage-hytale-server.sh restart normal
+./manage-hytale-server.sh restart aot
 ```
 
-### Scenario 3: Enable Early Plugins
-
-```bash
-# Edit configuration
-nano Config/server.conf
-
-# Uncomment the line
-ACCEPT_EARLY_PLUGINS="--accept-early-plugins"
-
-# Restart
-./manage-hytale-server.sh restart normal
-```
-
-### Scenario 4: Server Update
+### Scenario 5: Server Update
 
 ```bash
 # Stop server
@@ -373,7 +426,7 @@ ACCEPT_EARLY_PLUGINS="--accept-early-plugins"
 ./manage-hytale-server.sh start aot
 ```
 
-### Scenario 5: Backup Before Maintenance
+### Scenario 6: Backup Before Maintenance
 
 ```bash
 # Create backup
@@ -385,17 +438,61 @@ ACCEPT_EARLY_PLUGINS="--accept-early-plugins"
 # Perform maintenance...
 
 # Restart
-./manage-hytale-server.sh start normal
+./manage-hytale-server.sh start aot
 ```
 
-### Scenario 6: Using Environment Variables
+---
+
+## 🖥️ Screen Management
+
+The script uses **GNU Screen** to manage the server process, allowing interactive console access.
+
+### Screen Basics
+
+| Action | Command |
+|--------|---------|
+| **Start server** | `./manage-hytale-server.sh start aot` |
+| **Attach to console** | `./manage-hytale-server.sh attach` |
+| **Detach from console** | `Ctrl+A` then `D` |
+| **List sessions** | `screen -ls` |
+| **Stop server** | `./manage-hytale-server.sh stop` |
+
+### Screen Session Name
+
+The server runs in a screen session named: `hytale-server`
+
+### Manual Screen Commands
 
 ```bash
-# Start with more memory (temporary)
-JAVA_OPTS="-Xmx16G -Xms8G" ./manage-hytale-server.sh start normal
+# List all screen sessions
+screen -ls
 
-# Download pre-release version
-PATCHLINE=pre-release ./manage-hytale-server.sh update
+# Attach manually
+screen -r hytale-server
+
+# Detach
+# Press: Ctrl+A then D
+
+# Kill session manually (if needed)
+screen -S hytale-server -X quit
+```
+
+### Console Commands
+
+Once attached to the console, you can execute server commands:
+
+```bash
+# Display help
+/help
+
+# Authentication
+/auth status
+/auth login browser
+
+# Stop server
+/stop
+
+# And any other Hytale server command
 ```
 
 ---
@@ -412,7 +509,7 @@ PATCHLINE=pre-release ./manage-hytale-server.sh update
 cp my-mod.jar Server/mods/
 
 # Restart
-./manage-hytale-server.sh restart normal
+./manage-hytale-server.sh restart aot
 ```
 
 ### Automatic Manifest Extraction
@@ -433,18 +530,14 @@ Example output:
 ```
 [INFO] Installed mods:
 
-  NAME                                VERSION              DESCRIPTION
+  NOM                                 VERSION              DESCRIPTION
   ─────────────────────────────────── ──────────────────── ─────────────────────────────────────────────
   LevelingCore                        0.2.0                A modern, flexible leveling system for Hyt...
   Hybrid                              1.5                  Hybrid is a mod library that contains com...
   MultipleHUD                         1.0.1                A simple mod that allows you to have mult...
   Party Plugin                        1.3.8                Create parties with friends, see their hp...
-  AdvancedItemInfo                    1.0.4                Adds a command to open a GUI with all the...
-  EyeSpy                              2026.1.14-55560      -
-  AutoAnnounce                        1.1.1                Automatically broadcasts announcements to...
-  Overstacked                         2026.1.12-30731      Configure the max stack size of items!
 
-[INFO] Total: 8 mod(s) - Manifests: /root/hytale/Mods-Manifest/
+[INFO] Total: 4 mod(s) - Manifests: /root/hytale/Mods-Manifest/
 ```
 
 ### Removing Mods
@@ -457,7 +550,7 @@ Example output:
 rm Server/mods/my-mod.jar
 
 # Restart
-./manage-hytale-server.sh start normal
+./manage-hytale-server.sh start aot
 ```
 
 ---
@@ -490,10 +583,10 @@ ls -lh Backups/
 
 # Extract backup
 cd /root/hytale
-tar -xzf Backups/server_backup_20260118_143000.tar.gz
+tar -xzf Backups/server_backup_20260121_100000.tar.gz
 
 # Restart
-./manage-hytale-server.sh start normal
+./manage-hytale-server.sh start aot
 ```
 
 ### Automating Backups
@@ -526,6 +619,7 @@ cat Logs/server.log
 - Insufficient memory → Increase `JAVA_MEMORY`
 - Port already in use → Change port
 - Corrupted files → Reinstall with `./manage-hytale-server.sh install`
+- Screen not installed → `apt-get install screen`
 
 ### Authentication Error
 
@@ -535,6 +629,20 @@ rm Config/.hytale-downloader-credentials.json
 
 # Reinstall
 ./manage-hytale-server.sh install
+```
+
+### Can't Attach to Console
+
+```bash
+# Check if screen session exists
+screen -ls
+
+# Check if server is running
+./manage-hytale-server.sh status
+
+# If session is orphaned, clean it
+screen -S hytale-server -X quit
+./manage-hytale-server.sh start aot
 ```
 
 ### Server Stops Unexpectedly
@@ -570,7 +678,7 @@ cat Mods-Manifest/mods_summary.txt
 
 **Restart to regenerate:**
 ```bash
-./manage-hytale-server.sh restart normal
+./manage-hytale-server.sh restart aot
 ```
 
 ### Permission Issues
@@ -593,6 +701,9 @@ cat .hytale-server.pid
 # Force stop manually
 kill -9 $(cat .hytale-server.pid)
 rm .hytale-server.pid
+
+# Clean screen session
+screen -S hytale-server -X quit
 ```
 
 ---
@@ -610,12 +721,40 @@ rm .hytale-server.pid
 - 💡 AOT mode is recommended for frequent restarts
 - 💡 Allocate at least 4GB RAM for stable server
 - 💡 Use SSD for better performance
+- 💡 Screen adds minimal overhead
 
 ### Maintenance
 
 - 🔄 Check for updates regularly
 - 🔄 Clean old logs: `rm Logs/server.log.old`
 - 🔄 Check disk space: `df -h`
+- 🔄 Monitor screen sessions: `screen -ls`
+
+---
+
+## 🏗️ Architecture
+
+### Modular Design
+
+The script uses a **modular architecture** with 8 function files:
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `config.sh` | Configuration | Load, init, migrate config |
+| `command.sh` | Routing | Dispatch commands |
+| `downloader.sh` | Installation | Install, update, download |
+| `manager.sh` | Lifecycle | Start, stop, restart, attach |
+| `status.sh` | Monitoring | Status, mods, is_running |
+| `backup.sh` | Backups | Initial & data backups |
+| `clear.sh` | Maintenance | World reset |
+| `logs.sh` | Logging | Display logs |
+
+### Benefits
+
+- ✅ **Maintainable**: Each file has a clear responsibility
+- ✅ **Extensible**: Easy to add new features
+- ✅ **Readable**: Well-organized code
+- ✅ **Debuggable**: Isolated functions
 
 ---
 
@@ -632,6 +771,9 @@ tail -50 Logs/server.log
 
 # Real-time logs
 ./manage-hytale-server.sh logs
+
+# Attach to console
+./manage-hytale-server.sh attach
 ```
 
 ### System Information
@@ -648,6 +790,9 @@ df -h
 
 # Server process
 ps aux | grep -i hytale
+
+# Screen sessions
+screen -ls
 ```
 
 ### Complete Reset
@@ -674,8 +819,9 @@ This script is provided "as is" without warranty. Use at your own risk.
 
 - [Official Hytale Documentation](https://support.hytale.com/)
 - [Hytale Downloader](https://downloader.hytale.com/)
+- [GNU Screen Manual](https://www.gnu.org/software/screen/manual/screen.html)
 
 ---
 
-**Script Version:** 2.0  
-**Last Updated:** 2026-01-20
+**Script Version:** 2.1 - Modular Architecture  
+**Last Updated:** 2026-01-21
